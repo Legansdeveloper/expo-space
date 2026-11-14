@@ -1,0 +1,792 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Business Flow — ExpoSpace</title>
+<style>
+  :root {
+    --bg: #f1f5f9;
+    --panel: #ffffff;
+    --ink: #0f172a;
+    --muted: #64748b;
+    --line: #e2e8f0;
+    --blue: #2563eb;
+    --violet: #7c3aed;
+    --green: #059669;
+    --shadow: 0 6px 20px rgba(15, 23, 42, .10);
+  }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; }
+  body {
+    margin: 0;
+    font-family: "Segoe UI", system-ui, -apple-system, Roboto, sans-serif;
+    background: var(--bg);
+    color: var(--ink);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  /* ---------- Toolbar ---------- */
+  .toolbar {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+    padding: 10px 16px;
+    background: var(--panel);
+    border-bottom: 1px solid var(--line);
+    z-index: 20;
+  }
+  .toolbar h1 { font-size: 15px; margin: 0 12px 0 0; font-weight: 700; letter-spacing: -.2px; }
+  .toolbar h1 span { color: var(--blue); }
+  .toolbar .sep { width: 1px; height: 24px; background: var(--line); margin: 0 4px; }
+  .toolbar .spacer { flex: 1; }
+  button.tb {
+    font: inherit;
+    font-size: 13px;
+    padding: 7px 12px;
+    border: 1px solid var(--line);
+    background: #fff;
+    color: var(--ink);
+    border-radius: 9px;
+    cursor: pointer;
+    transition: .15s;
+    white-space: nowrap;
+  }
+  button.tb:hover { border-color: #cbd5e1; background: #f8fafc; }
+  button.tb.active { background: var(--blue); border-color: var(--blue); color: #fff; }
+  button.tb:disabled { opacity: .45; cursor: not-allowed; }
+  button.tb.primary { background: var(--blue); border-color: var(--blue); color: #fff; }
+  button.tb.primary:hover { background: #1d4ed8; }
+  .zoom-value { font-size: 13px; color: var(--muted); min-width: 46px; text-align: center; }
+  .save-note { font-size: 12px; color: var(--muted); }
+  .hint {
+    font-size: 12.5px;
+    color: var(--muted);
+    padding: 7px 16px;
+    background: #f8fafc;
+    border-bottom: 1px solid var(--line);
+    z-index: 15;
+  }
+  .hint b { color: var(--ink); }
+  .hint.connecting { background: #eff6ff; color: #1d4ed8; border-color: #bfdbfe; }
+
+  /* ---------- Canvas ---------- */
+  .viewport { flex: 1; overflow: auto; position: relative; }
+  .scaler { position: relative; }
+  .canvas {
+    position: relative;
+    width: 1960px;
+    height: 1060px;
+    transform-origin: 0 0;
+    background-color: #fff;
+    background-image: radial-gradient(#d8e0ea 1px, transparent 1px);
+    background-size: 24px 24px;
+  }
+
+  .lane {
+    position: absolute;
+    left: 20px;
+    width: 1920px;
+    border-radius: 18px;
+    border: 1px dashed #cbd5e1;
+    pointer-events: none;
+    z-index: 1;
+  }
+  .lane .lane-title {
+    position: absolute;
+    top: 12px;
+    left: 16px;
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: .14em;
+    text-transform: uppercase;
+  }
+  .lane .lane-desc {
+    position: absolute;
+    top: 12px;
+    left: 210px;
+    font-size: 12px;
+    color: var(--muted);
+  }
+  .lane-capstone { top: 30px; height: 310px; background: rgba(37, 99, 235, .05); border-color: rgba(37, 99, 235, .35); }
+  .lane-capstone .lane-title { color: var(--blue); }
+  .lane-sistem { top: 370px; height: 300px; background: rgba(124, 58, 237, .05); border-color: rgba(124, 58, 237, .35); }
+  .lane-sistem .lane-title { color: var(--violet); }
+  .lane-mitra { top: 700px; height: 300px; background: rgba(5, 150, 105, .05); border-color: rgba(5, 150, 105, .35); }
+  .lane-mitra .lane-title { color: var(--green); }
+
+  #edges { position: absolute; inset: 0; z-index: 2; overflow: visible; }
+  .edge { fill: none; stroke-width: 2.2; stroke-linecap: round; pointer-events: none; }
+  .edge-hit { fill: none; stroke: transparent; stroke-width: 16; cursor: pointer; }
+  .edge-label { font-size: 11px; font-weight: 600; paint-order: stroke; stroke: #fff; stroke-width: 4px; stroke-linejoin: round; }
+
+  /* ---------- Nodes ---------- */
+  .node {
+    position: absolute;
+    width: 210px;
+    min-height: 74px;
+    padding: 11px 13px 12px;
+    background: #fff;
+    border: 1.5px solid var(--line);
+    border-left-width: 5px;
+    border-radius: 13px;
+    box-shadow: var(--shadow);
+    cursor: grab;
+    z-index: 3;
+    user-select: none;
+    touch-action: none;
+    transition: box-shadow .15s, border-color .15s;
+  }
+  .node:hover { box-shadow: 0 10px 26px rgba(15, 23, 42, .16); }
+  .node.dragging { cursor: grabbing; box-shadow: 0 16px 34px rgba(15, 23, 42, .24); z-index: 9; }
+  .node .node-title { font-size: 13.5px; font-weight: 700; line-height: 1.3; }
+  .node .node-sub { font-size: 11.5px; color: var(--muted); margin-top: 5px; line-height: 1.4; word-break: break-word; }
+  .node.capstone { border-left-color: var(--blue); }
+  .node.sistem { border-left-color: var(--violet); }
+  .node.mitra { border-left-color: var(--green); }
+  .node.selected { outline: 2.5px solid var(--blue); outline-offset: 2px; }
+  .node.connect-source { outline: 2.5px dashed var(--violet); outline-offset: 2px; }
+  .node.connect-mode { cursor: crosshair; }
+
+  /* ---------- Legend ---------- */
+  .legend {
+    position: fixed;
+    left: 16px;
+    bottom: 16px;
+    background: rgba(255, 255, 255, .95);
+    border: 1px solid var(--line);
+    border-radius: 13px;
+    padding: 11px 14px;
+    font-size: 12px;
+    box-shadow: var(--shadow);
+    z-index: 25;
+    max-width: 320px;
+    backdrop-filter: blur(6px);
+  }
+  .legend h4 { margin: 0 0 7px; font-size: 11px; letter-spacing: .12em; text-transform: uppercase; color: var(--muted); }
+  .legend .row { display: flex; align-items: center; gap: 8px; margin-top: 5px; }
+  .legend .dot { width: 10px; height: 10px; border-radius: 3px; flex: none; }
+  .legend .arrow { color: var(--muted); font-size: 14px; }
+
+  /* ---------- Modal ---------- */
+  .modal-backdrop {
+    position: fixed; inset: 0;
+    background: rgba(15, 23, 42, .45);
+    display: none;
+    align-items: center; justify-content: center;
+    z-index: 50;
+  }
+  .modal-backdrop.open { display: flex; }
+  .modal {
+    width: 360px;
+    background: #fff;
+    border-radius: 16px;
+    padding: 20px;
+    box-shadow: 0 30px 60px rgba(15, 23, 42, .35);
+  }
+  .modal h3 { margin: 0 0 14px; font-size: 15px; }
+  .modal label { display: block; font-size: 12px; color: var(--muted); margin-top: 12px; }
+  .modal input, .modal textarea, .modal select {
+    width: 100%;
+    margin-top: 5px;
+    font: inherit;
+    font-size: 13.5px;
+    padding: 9px 11px;
+    border: 1px solid var(--line);
+    border-radius: 9px;
+    background: #f8fafc;
+    color: var(--ink);
+    resize: vertical;
+  }
+  .modal input:focus, .modal textarea:focus, .modal select:focus { outline: 2px solid var(--blue); background: #fff; border-color: transparent; }
+  .modal .modal-actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 18px; }
+
+  @media print {
+    .toolbar, .hint, .legend { display: none; }
+    body { overflow: visible; }
+  }
+</style>
+</head>
+<body>
+
+<div class="toolbar">
+  <h1>Business Flow <span>ExpoSpace</span></h1>
+  <button class="tb primary" id="btnAdd">＋ Tambah node</button>
+  <button class="tb" id="btnConnect">🔗 Hubungkan</button>
+  <button class="tb" id="btnDelete" disabled>🗑 Hapus</button>
+  <div class="sep"></div>
+  <button class="tb" id="btnReset">↺ Reset tata letak</button>
+  <div class="sep"></div>
+  <button class="tb" id="btnZoomOut">−</button>
+  <span class="zoom-value" id="zoomValue">100%</span>
+  <button class="tb" id="btnZoomIn">＋</button>
+  <div class="spacer"></div>
+  <span class="save-note" id="saveNote">Tata letak tersimpan otomatis</span>
+</div>
+
+<div class="hint" id="hint">
+  <b>Geser</b> node untuk menata diagram · <b>Klik dua kali</b> node untuk mengubah teks · <b>Klik panah</b> lalu tekan <b>Del</b> untuk menghapusnya · <b>Tahan area kosong</b> untuk menggeser kanvas.
+</div>
+
+<div class="viewport" id="viewport">
+  <div class="scaler" id="scaler">
+    <div class="canvas" id="canvas">
+      <div class="lane lane-capstone"><span class="lane-title">Capstone (Mahasiswa)</span><span class="lane-desc">Membuat & mempublikasikan proyek</span></div>
+      <div class="lane lane-sistem"><span class="lane-title">Sistem (Laravel)</span><span class="lane-desc">Validasi, penyimpanan, aturan bisnis</span></div>
+      <div class="lane lane-mitra"><span class="lane-title">Mitra (Industri)</span><span class="lane-desc">Menjelajah, meninjau & menilai proyek</span></div>
+      <svg id="edges"></svg>
+    </div>
+  </div>
+</div>
+
+<div class="legend">
+  <h4>Legenda</h4>
+  <div class="row"><span class="dot" style="background:#2563eb"></span> Kolam Capstone — aksi mahasiswa</div>
+  <div class="row"><span class="dot" style="background:#7c3aed"></span> Kolam Sistem — proses backend</div>
+  <div class="row"><span class="dot" style="background:#059669"></span> Kolam Mitra — aksi mitra industri</div>
+  <div class="row"><span class="arrow">→</span> Alur utama · label = kondisi/tujuan</div>
+</div>
+
+<div class="modal-backdrop" id="modalBackdrop">
+  <div class="modal" role="dialog" aria-modal="true">
+    <h3 id="modalTitle">Node</h3>
+    <label>Judul<input id="mTitle" type="text" maxlength="70" /></label>
+    <label>Keterangan<textarea id="mSub" rows="3" maxlength="180"></textarea></label>
+    <label>Kolam<select id="mLane">
+      <option value="capstone">Capstone</option>
+      <option value="sistem">Sistem</option>
+      <option value="mitra">Mitra</option>
+    </select></label>
+    <div class="modal-actions">
+      <button class="tb" id="mCancel">Batal</button>
+      <button class="tb primary" id="mSave">Simpan</button>
+    </div>
+  </div>
+</div>
+
+<script>
+(function () {
+  'use strict';
+
+  var W = 1960, H = 1060, NODE_W = 210;
+  var STORAGE_KEY = 'expospace-business-flow-v1';
+
+  var LANES = {
+    capstone: '#2563eb',
+    sistem: '#7c3aed',
+    mitra: '#059669'
+  };
+
+  var DEFAULT_NODES = [
+    // --- Capstone ---
+    { id: 'c1', lane: 'capstone', x: 60,   y: 150, title: 'Daftar / Login', sub: 'POST /auth/register · role = capstone' },
+    { id: 'c2', lane: 'capstone', x: 300,  y: 150, title: 'Buat data tim & proyek', sub: 'teams · updateOrCreate(owner_id)' },
+    { id: 'c3', lane: 'capstone', x: 540,  y: 62,  title: '01 · Poster', sub: 'jpg/png/webp · maks 5 MB' },
+    { id: 'c4', lane: 'capstone', x: 540,  y: 214, title: '02 · Landing page', sub: 'landing_page_url wajib valid' },
+    { id: 'c5', lane: 'capstone', x: 780,  y: 62,  title: '03 · Business flow', sub: 'URL atau gambar' },
+    { id: 'c6', lane: 'capstone', x: 780,  y: 214, title: '04 · Application', sub: 'application_url wajib valid' },
+    { id: 'c7', lane: 'capstone', x: 1030, y: 150, title: 'Atur kuesioner', sub: 'seed 10 template · skala 1–5' },
+    { id: 'c8', lane: 'capstone', x: 1270, y: 150, title: 'Preview proyek', sub: 'poster + 3 tab konten' },
+    { id: 'c9', lane: 'capstone', x: 1510, y: 150, title: 'Publish proyek', sub: 'syarat: 4 komponen lengkap' },
+
+    // --- Sistem ---
+    { id: 's1', lane: 'sistem', x: 60,   y: 430, title: 'Autentikasi & sesi', sub: 'Auth::login · session regenerate' },
+    { id: 's2', lane: 'sistem', x: 300,  y: 430, title: 'Simpan data tim', sub: 'tabel teams' },
+    { id: 's3', lane: 'sistem', x: 540,  y: 420, title: 'Validasi komponen', sub: '403 non-capstone · rule per tipe' },
+    { id: 's4', lane: 'sistem', x: 540,  y: 556, title: 'Simpan file gambar', sub: 'storage/public · file lama dihapus' },
+    { id: 's5', lane: 'sistem', x: 780,  y: 420, title: 'Upsert 4 komponen', sub: 'posters · landing_pages · business_flows · applications' },
+    { id: 's6', lane: 'sistem', x: 1030, y: 430, title: 'Simpan kuesioner', sub: 'DB::transaction (delete + insert)' },
+    { id: 's7', lane: 'sistem', x: 1270, y: 430, title: 'Cek kelengkapan', sub: '422 bila < 4 komponen' },
+    { id: 's8', lane: 'sistem', x: 1510, y: 414, title: 'is_published = true', sub: 'proyek tampil untuk Mitra' },
+    { id: 's9', lane: 'sistem', x: 1510, y: 556, title: 'Simpan jawaban', sub: 'response + answers (skor 1–5)' },
+
+    // --- Mitra ---
+    { id: 'm1', lane: 'mitra', x: 60,   y: 810, title: 'Daftar / Login', sub: 'POST /auth/register · role = mitra' },
+    { id: 'm2', lane: 'mitra', x: 300,  y: 810, title: 'Dashboard proyek', sub: 'GET /api/projects · search + kategori' },
+    { id: 'm3', lane: 'mitra', x: 540,  y: 810, title: 'Detail proyek', sub: 'poster + 3 tab konten' },
+    { id: 'm4', lane: 'mitra', x: 780,  y: 810, title: 'Preview konten', sub: 'iframe / gambar business flow' },
+    { id: 'm5', lane: 'mitra', x: 1030, y: 810, title: 'Isi kuesioner', sub: 'identitas responden wajib' },
+    { id: 'm6', lane: 'mitra', x: 1270, y: 810, title: 'Penilaian 1–5', sub: 'semua pertanyaan wajib dijawab' },
+    { id: 'm7', lane: 'mitra', x: 1510, y: 810, title: 'Feedback tersimpan', sub: 'questionnaire_responses/answers' }
+  ];
+
+  var DEFAULT_EDGES = [
+    { from: 'c1', to: 'c2' },
+    { from: 'c1', to: 's1' },
+    { from: 'c2', to: 's2' },
+    { from: 'c2', to: 'c3' },
+    { from: 'c3', to: 's3' },
+    { from: 'c4', to: 's3' },
+    { from: 'c5', to: 's3' },
+    { from: 'c6', to: 's3' },
+    { from: 's3', to: 's4', label: 'tipe: gambar' },
+    { from: 's3', to: 's5', label: 'tipe: url' },
+    { from: 's4', to: 's5' },
+    { from: 'c6', to: 'c7' },
+    { from: 'c7', to: 's6' },
+    { from: 'c7', to: 'c8' },
+    { from: 'c8', to: 'c9' },
+    { from: 'c9', to: 's7' },
+    { from: 's7', to: 's8', label: 'lengkap' },
+    { from: 's8', to: 'm2', label: 'published' },
+    { from: 'm1', to: 'm2' },
+    { from: 'm2', to: 'm3' },
+    { from: 'm3', to: 'm4' },
+    { from: 'm4', to: 'm5' },
+    { from: 'm5', to: 'm6' },
+    { from: 'm6', to: 's9', label: 'submit' },
+    { from: 's9', to: 'm7' }
+  ];
+
+  /* ---------------- State ---------------- */
+  var state = { nodes: null, edges: null };
+  var zoom = 1;
+  var selected = null;        // { type: 'node'|'edge', id }
+  var connectMode = false;
+  var connectSource = null;
+  var editingId = null;       // node id when modal open, or 'new'
+
+  var canvas = document.getElementById('canvas');
+  var scaler = document.getElementById('scaler');
+  var viewport = document.getElementById('viewport');
+  var svg = document.getElementById('edges');
+  var hint = document.getElementById('hint');
+  var saveNote = document.getElementById('saveNote');
+  var deleteBtn = document.getElementById('btnDelete');
+  var connectBtn = document.getElementById('btnConnect');
+  var zoomValue = document.getElementById('zoomValue');
+
+  var els = {};               // id -> node element
+
+  function deepClone(v) { return JSON.parse(JSON.stringify(v)); }
+
+  function loadState() {
+    try {
+      var raw = localStorage.getItem(STORAGE_KEY);
+      if (raw) {
+        var parsed = JSON.parse(raw);
+        if (parsed && parsed.nodes && parsed.edges) return parsed;
+      }
+    } catch (e) { /* abaikan data rusak */ }
+    return { nodes: deepClone(DEFAULT_NODES), edges: deepClone(DEFAULT_EDGES) };
+  }
+
+  var saveTimer = null;
+  function saveState() {
+    clearTimeout(saveTimer);
+    saveTimer = setTimeout(function () {
+      try {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+        saveNote.textContent = 'Tersimpan ✓ ' + new Date().toLocaleTimeString('id-ID');
+      } catch (e) {
+        saveNote.textContent = 'Gagal menyimpan ke localStorage';
+      }
+    }, 250);
+  }
+
+  function nodeById(id) {
+    for (var i = 0; i < state.nodes.length; i++) if (state.nodes[i].id === id) return state.nodes[i];
+    return null;
+  }
+
+  /* ---------------- Rendering ---------------- */
+  function renderNodes() {
+    var seen = {};
+    state.nodes.forEach(function (n) {
+      seen[n.id] = true;
+      var el = els[n.id];
+      if (!el) {
+        el = document.createElement('div');
+        el.className = 'node';
+        el.dataset.id = n.id;
+        el.innerHTML = '<div class="node-title"></div><div class="node-sub"></div>';
+        canvas.appendChild(el);
+        els[n.id] = el;
+        attachNodeEvents(el);
+      }
+      el.className = 'node ' + n.lane +
+        (selected && selected.type === 'node' && selected.id === n.id ? ' selected' : '') +
+        (connectMode && connectSource === n.id ? ' connect-source' : '') +
+        (connectMode ? ' connect-mode' : '');
+      el.style.left = n.x + 'px';
+      el.style.top = n.y + 'px';
+      el.querySelector('.node-title').textContent = n.title;
+      el.querySelector('.node-sub').textContent = n.sub || '';
+      el.querySelector('.node-sub').style.display = n.sub ? '' : 'none';
+    });
+    Object.keys(els).forEach(function (id) {
+      if (!seen[id]) { els[id].remove(); delete els[id]; }
+    });
+  }
+
+  function anchors(a, b) {
+    var ax = a.x + a.w / 2, ay = a.y + a.h / 2;
+    var bx = b.x + b.w / 2, by = b.y + b.h / 2;
+    var dx = bx - ax, dy = by - ay;
+    // Antar kolam: panah selalu vertikal (bawah → atas) agar melalui koridor antar kolam,
+    // bukan menyeret garis panjang melewati node lain.
+    var preferHorizontal = a.lane === b.lane && Math.abs(dx) >= Math.abs(dy);
+    if (preferHorizontal) {
+      return dx >= 0
+        ? { p1: { x: a.x + a.w, y: ay }, p2: { x: b.x, y: by }, horiz: true }
+        : { p1: { x: a.x, y: ay }, p2: { x: b.x + b.w, y: by }, horiz: true };
+    }
+    return dy >= 0
+      ? { p1: { x: ax, y: a.y + a.h }, p2: { x: bx, y: b.y }, horiz: false }
+      : { p1: { x: ax, y: a.y }, p2: { x: bx, y: b.y + b.h }, horiz: false };
+  }
+
+  function metrics(node) {
+    var el = els[node.id];
+    var w = el ? el.offsetWidth : NODE_W;
+    var h = el ? el.offsetHeight : 74;
+    return { x: node.x, y: node.y, w: w, h: h };
+  }
+
+  function renderEdges() {
+    var parts = [
+      '<defs>' +
+        '<marker id="arrow-capstone" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#2563eb"/></marker>' +
+        '<marker id="arrow-sistem" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#7c3aed"/></marker>' +
+        '<marker id="arrow-mitra" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#059669"/></marker>' +
+        '<marker id="arrow-sel" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#0f172a"/></marker>' +
+      '</defs>'
+    ];
+    var labelJobs = [];
+
+    state.edges.forEach(function (e, i) {
+      var a = nodeById(e.from), b = nodeById(e.to);
+      if (!a || !b) return;
+      var ma = metrics(a), mb = metrics(b);
+      var an = anchors(ma, mb);
+      var d;
+      if (an.horiz) {
+        var kx = Math.max(34, Math.abs(an.p2.x - an.p1.x) * 0.42);
+        var dir = an.p2.x >= an.p1.x ? 1 : -1;
+        d = 'M ' + an.p1.x + ' ' + an.p1.y +
+            ' C ' + (an.p1.x + kx * dir) + ' ' + an.p1.y + ', ' +
+                    (an.p2.x - kx * dir) + ' ' + an.p2.y + ', ' +
+                    an.p2.x + ' ' + an.p2.y;
+      } else {
+        var ky = Math.max(34, Math.abs(an.p2.y - an.p1.y) * 0.42);
+        var vdir = an.p2.y >= an.p1.y ? 1 : -1;
+        d = 'M ' + an.p1.x + ' ' + an.p1.y +
+            ' C ' + an.p1.x + ' ' + (an.p1.y + ky * vdir) + ', ' +
+                    an.p2.x + ' ' + (an.p2.y - ky * vdir) + ', ' +
+                    an.p2.x + ' ' + an.p2.y;
+      }
+
+      var color = LANES[a.lane] || '#2563eb';
+      var isSelected = selected && selected.type === 'edge' && selected.id === i;
+      var marker = isSelected ? 'arrow-sel' : 'arrow-' + a.lane;
+      var edgeId = 'edge-' + i;
+
+      parts.push('<path class="edge" id="' + edgeId + '" d="' + d + '" stroke="' +
+        (isSelected ? '#0f172a' : color) + '" stroke-width="' + (isSelected ? 3.4 : 2.2) +
+        '" marker-end="url(#' + marker + ')"/>');
+      parts.push('<path class="edge-hit" data-edge="' + i + '" d="' + d + '"/>');
+
+      if (e.label) labelJobs.push({ i: i, text: e.label, color: color });
+    });
+
+    svg.setAttribute('width', W);
+    svg.setAttribute('height', H);
+    svg.innerHTML = parts.join('');
+
+    labelJobs.forEach(function (job) {
+      var path = document.getElementById('edge-' + job.i);
+      if (!path || !path.getPointAtLength) return;
+      var len = path.getTotalLength();
+      var pt = path.getPointAtLength(len / 2);
+      var text = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+      text.setAttribute('x', pt.x);
+      text.setAttribute('y', pt.y - 7);
+      text.setAttribute('text-anchor', 'middle');
+      text.setAttribute('class', 'edge-label');
+      text.setAttribute('fill', job.color);
+      text.textContent = job.text;
+      svg.appendChild(text);
+    });
+  }
+
+  function renderAll() {
+    renderNodes();
+    renderEdges();
+    deleteBtn.disabled = !selected;
+  }
+
+  function scheduleRedraw() {
+    if (scheduleRedraw.raf) return;
+    scheduleRedraw.raf = requestAnimationFrame(function () {
+      scheduleRedraw.raf = null;
+      renderEdges();
+    });
+  }
+
+  /* ---------------- Selection ---------------- */
+  function select(type, id) {
+    selected = type ? { type: type, id: id } : null;
+    renderAll();
+  }
+
+  /* ---------------- Drag / pan ---------------- */
+  var drag = null;
+  var pan = null;
+
+  function attachNodeEvents(el) {
+    el.addEventListener('pointerdown', function (ev) {
+      ev.stopPropagation();
+      var id = el.dataset.id;
+
+      if (connectMode) {
+        handleConnectClick(id);
+        return;
+      }
+
+      var node = nodeById(id);
+      if (!node) return;
+      select('node', id);
+
+      drag = {
+        id: id,
+        startX: ev.clientX,
+        startY: ev.clientY,
+        origX: node.x,
+        origY: node.y,
+        moved: false
+      };
+      el.classList.add('dragging');
+      el.setPointerCapture(ev.pointerId);
+    });
+
+    el.addEventListener('pointermove', function (ev) {
+      if (!drag || drag.id !== el.dataset.id) return;
+      var node = nodeById(drag.id);
+      if (!node) return;
+      var dx = (ev.clientX - drag.startX) / zoom;
+      var dy = (ev.clientY - drag.startY) / zoom;
+      if (Math.abs(dx) > 2 || Math.abs(dy) > 2) drag.moved = true;
+
+      var h = el.offsetHeight;
+      node.x = Math.max(0, Math.min(W - el.offsetWidth, drag.origX + dx));
+      node.y = Math.max(0, Math.min(H - h, drag.origY + dy));
+      el.style.left = node.x + 'px';
+      el.style.top = node.y + 'px';
+      scheduleRedraw();
+    });
+
+    function endDrag(ev) {
+      if (!drag || drag.id !== el.dataset.id) return;
+      el.classList.remove('dragging');
+      try { el.releasePointerCapture(ev.pointerId); } catch (e) {}
+      if (drag.moved) saveState();
+      drag = null;
+    }
+    el.addEventListener('pointerup', endDrag);
+    el.addEventListener('pointercancel', endDrag);
+
+    el.addEventListener('dblclick', function (ev) {
+      ev.stopPropagation();
+      openModal(el.dataset.id);
+    });
+  }
+
+  // Pan kanvas dengan menahan tombol pada area kosong
+  canvas.addEventListener('pointerdown', function (ev) {
+    if (ev.target !== canvas && !ev.target.classList.contains('lane')) return;
+    if (connectMode) { handleConnectClick(null); return; }
+    select(null);
+    pan = { x: ev.clientX, y: ev.clientY, sl: viewport.scrollLeft, st: viewport.scrollTop };
+    canvas.setPointerCapture(ev.pointerId);
+    canvas.style.cursor = 'grabbing';
+  });
+  canvas.addEventListener('pointermove', function (ev) {
+    if (!pan) return;
+    viewport.scrollLeft = pan.sl - (ev.clientX - pan.x);
+    viewport.scrollTop = pan.st - (ev.clientY - pan.y);
+  });
+  function endPan(ev) {
+    if (!pan) return;
+    pan = null;
+    canvas.style.cursor = '';
+    try { canvas.releasePointerCapture(ev.pointerId); } catch (e) {}
+  }
+  canvas.addEventListener('pointerup', endPan);
+  canvas.addEventListener('pointercancel', endPan);
+
+  // Klik panah (edge) untuk memilih
+  svg.addEventListener('pointerdown', function (ev) {
+    var idx = ev.target.getAttribute && ev.target.getAttribute('data-edge');
+    if (idx === null || idx === undefined) return;
+    ev.stopPropagation();
+    select('edge', Number(idx));
+  });
+
+  /* ---------------- Connect mode ---------------- */
+  function setConnectMode(on) {
+    connectMode = on;
+    connectSource = null;
+    connectBtn.classList.toggle('active', on);
+    hint.classList.toggle('connecting', on);
+    hint.innerHTML = on
+      ? '<b>Mode hubungkan aktif:</b> klik node <b>asal</b>, lalu klik node <b>tujuan</b>. Tekan <b>Esc</b> untuk keluar.'
+      : '<b>Geser</b> node untuk menata diagram · <b>Klik dua kali</b> node untuk mengubah teks · <b>Klik panah</b> lalu tekan <b>Del</b> untuk menghapusnya · <b>Tahan area kosong</b> untuk menggeser kanvas.';
+    renderAll();
+  }
+
+  function handleConnectClick(id) {
+    if (!id) { connectSource = null; renderAll(); return; }
+    if (!connectSource) {
+      connectSource = id;
+      renderAll();
+      return;
+    }
+    if (connectSource === id) { connectSource = null; renderAll(); return; }
+    var exists = state.edges.some(function (e) {
+      return e.from === connectSource && e.to === id;
+    });
+    if (!exists) {
+      state.edges.push({ from: connectSource, to: id });
+      saveState();
+    }
+    connectSource = null;
+    renderAll();
+  }
+
+  /* ---------------- Toolbar actions ---------------- */
+  document.getElementById('btnAdd').addEventListener('click', function () { openModal('new'); });
+  connectBtn.addEventListener('click', function () { setConnectMode(!connectMode); });
+
+  deleteBtn.addEventListener('click', deleteSelected);
+
+  function deleteSelected() {
+    if (!selected) return;
+    if (selected.type === 'node') {
+      var id = selected.id;
+      state.nodes = state.nodes.filter(function (n) { return n.id !== id; });
+      state.edges = state.edges.filter(function (e) { return e.from !== id && e.to !== id; });
+    } else {
+      state.edges.splice(selected.id, 1);
+    }
+    selected = null;
+    saveState();
+    renderAll();
+  }
+
+  document.getElementById('btnReset').addEventListener('click', function () {
+    if (!window.confirm('Kembalikan tata letak & hubungan ke diagram awal?')) return;
+    state = { nodes: deepClone(DEFAULT_NODES), edges: deepClone(DEFAULT_EDGES) };
+    Object.keys(els).forEach(function (id) { els[id].remove(); delete els[id]; });
+    selected = null;
+    saveState();
+    renderAll();
+    viewport.scrollTo({ left: 0, top: 0, behavior: 'smooth' });
+  });
+
+  function setZoom(next) {
+    zoom = Math.max(0.4, Math.min(1.6, Math.round(next * 10) / 10));
+    canvas.style.transform = 'scale(' + zoom + ')';
+    scaler.style.width = (W * zoom) + 'px';
+    scaler.style.height = (H * zoom) + 'px';
+    zoomValue.textContent = Math.round(zoom * 100) + '%';
+  }
+  document.getElementById('btnZoomIn').addEventListener('click', function () { setZoom(zoom + 0.1); });
+  document.getElementById('btnZoomOut').addEventListener('click', function () { setZoom(zoom - 0.1); });
+
+  /* ---------------- Modal ---------------- */
+  var backdrop = document.getElementById('modalBackdrop');
+  var mTitle = document.getElementById('mTitle');
+  var mSub = document.getElementById('mSub');
+  var mLane = document.getElementById('mLane');
+
+  function openModal(id) {
+    editingId = id;
+    if (id === 'new') {
+      document.getElementById('modalTitle').textContent = 'Tambah node';
+      mTitle.value = '';
+      mSub.value = '';
+      mLane.value = 'capstone';
+    } else {
+      var n = nodeById(id);
+      if (!n) return;
+      document.getElementById('modalTitle').textContent = 'Ubah node';
+      mTitle.value = n.title;
+      mSub.value = n.sub || '';
+      mLane.value = n.lane;
+    }
+    backdrop.classList.add('open');
+    setTimeout(function () { mTitle.focus(); mTitle.select(); }, 30);
+  }
+
+  function closeModal() {
+    backdrop.classList.remove('open');
+    editingId = null;
+  }
+
+  document.getElementById('mCancel').addEventListener('click', closeModal);
+  backdrop.addEventListener('pointerdown', function (ev) { if (ev.target === backdrop) closeModal(); });
+
+  document.getElementById('mSave').addEventListener('click', function () {
+    var title = mTitle.value.trim();
+    if (!title) { mTitle.focus(); return; }
+    var sub = mSub.value.trim();
+    var lane = mLane.value;
+
+    if (editingId === 'new') {
+      var rect = viewport.getBoundingClientRect();
+      var cx = (viewport.scrollLeft + rect.width / 2) / zoom - NODE_W / 2;
+      var cy = (viewport.scrollTop + 140) / zoom;
+      var id = 'n' + Date.now().toString(36);
+      state.nodes.push({
+        id: id,
+        lane: lane,
+        x: Math.max(0, Math.min(W - NODE_W, cx)),
+        y: Math.max(0, Math.min(H - 90, cy)),
+        title: title,
+        sub: sub
+      });
+      selected = { type: 'node', id: id };
+    } else {
+      var n = nodeById(editingId);
+      if (n) { n.title = title; n.sub = sub; n.lane = lane; }
+    }
+    saveState();
+    closeModal();
+    renderAll();
+  });
+
+  /* ---------------- Keyboard ---------------- */
+  document.addEventListener('keydown', function (ev) {
+    var tag = (ev.target.tagName || '').toLowerCase();
+    if (tag === 'input' || tag === 'textarea' || tag === 'select') {
+      if (ev.key === 'Escape') closeModal();
+      if (ev.key === 'Enter' && backdrop.classList.contains('open') && tag !== 'textarea') {
+        ev.preventDefault();
+        document.getElementById('mSave').click();
+      }
+      return;
+    }
+    if (ev.key === 'Escape') {
+      if (backdrop.classList.contains('open')) closeModal();
+      else if (connectMode) setConnectMode(false);
+      else if (connectSource) { connectSource = null; renderAll(); }
+      else select(null);
+    }
+    if ((ev.key === 'Delete' || ev.key === 'Backspace') && selected) {
+      ev.preventDefault();
+      deleteSelected();
+    }
+  });
+
+  /* ---------------- Init ---------------- */
+  state = loadState();
+  setZoom(1);
+  renderAll();
+  window.addEventListener('resize', scheduleRedraw);
+})();
+</script>
+</body>
+</html>
